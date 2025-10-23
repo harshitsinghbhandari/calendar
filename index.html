@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minimalist Task Tracker</title>
+    <!-- Tailwind CSS CDN (For Styling) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js CDN (For Interactivity and State Management) -->
+    <script src="https://cdn.jsdelivr.net/gh/alpinejs/alpine@v3.x.x/dist/cdn.min.js"></script>
+    
+    <!-- Configuration for dark theme and custom colors -->
+    <script>
+        // Define custom colors for the dark theme
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary-dark': '#121212', // Background
+                        'secondary-dark': '#1e1e1e', // Settings/Modal backdrop
+                        'card-dark': '#242424', // Card background
+                        'text-light': '#e0e0e0', // Main text
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom font import for clean typography (Inter) */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+        /* Hide elements before Alpine init to prevent flicker */
+        [x-cloak] { display: none !important; }
+
+        /* Custom scrollbar for dark theme aesthetic */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 4px; }
+        ::-webkit-scrollbar-track { background: #1e1e1e; }
+    </style>
+
+    <script>
+        // Alpine.js Application Logic
+        function app() {
+            return {
+                // --- State ---
+                tasks: [],
+                activeTab: 'deadlines', // 'deadlines', 'exams', 'competitions'
+                isModalOpen: false,
+                isSettingsOpen: false,
+                newItemType: 'deadline',
+                form: {},
+                
+                // --- UI Feedback State (Replacing alert/confirm) ---
+                message: '',
+                confirmAction: null,
+                confirmMessage: '',
+                
+                // --- Initialization and Persistence ---
+                init() {
+                    // 1. Load data from localStorage
+                    this.loadTasks();
+
+                    // 2. Watch the tasks array and save automatically on any change
+                    this.$watch('tasks', () => this.saveTasks());
+                },
+
+                loadTasks() {
+                    const storedTasks = localStorage.getItem('taskDashboard');
+                    if (storedTasks) {
+                        try {
+                            this.tasks = JSON.parse(storedTasks);
+                        } catch (e) {
+                            console.error("Error loading tasks from localStorage:", e);
+                            this.tasks = [];
+                        }
+                    }
+                },
+
+                saveTasks() {
+                    localStorage.setItem('taskDashboard', JSON.stringify(this.tasks));
+                },
+
+                // --- UI Helper Functions (Non-blocking feedback) ---
+                showMessage(text) {
+                    this.message = text;
+                    setTimeout(() => this.message = '', 3000); // Hide after 3 seconds
+                },
+
+                showConfirm(message, action) {
+                    this.confirmMessage = message;
+                    this.confirmAction = action;
+                },
+                
+                hideConfirm() {
+                    this.confirmMessage = '';
+                    this.confirmAction = null;
+                },
+
+                // Calculates days left until a given date
+                daysLeft(dateString) {
+                    const oneDay = 24 * 60 * 60 * 1000;
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+
+                    const targetDate = new Date(dateString);
+                    targetDate.setHours(0, 0, 0, 0);
+
+                    const diffDays = Math.round((targetDate.getTime() - today.getTime()) / oneDay);
+
+                    if (diffDays === 0) return 'Today';
+                    if (diffDays === 1) return 'Tomorrow';
+                    if (diffDays < 0) return `${Math.abs(diffDays)} days ago`;
+
+                    return `${diffDays} days left`;
+                },
+
+                formatDate(dateString) {
+                    const options = { year: 'numeric', month: 'short', day: 'numeric' };
+                    return new Date(dateString).toLocaleDateString(undefined, options);
+                },
+
+                // --- Computed Property (Filter and Sort Tasks) ---
+                get filteredTasks() {
+                    const typeMap = {
+                        'deadlines': 'deadline',
+                        'exams': 'exam',
+                        'competitions': 'competition',
+                    };
+                    
+                    const filtered = this.tasks.filter(task => task.type === typeMap[this.activeTab]);
+
+                    // Sort by date (ascending)
+                    return filtered.sort((a, b) => new Date(a.date) - new Date(b.date));
+                },
+
+                // --- Task Management Logic ---
+                openModal(type) {
+                    this.newItemType = type;
+                    this.form = this.resetForm(type);
+                    this.isModalOpen = true;
+                },
+
+                closeModal() {
+                    this.isModalOpen = false;
+                    this.form = {};
+                },
+
+                // Sets up the form object with default date and accent color
+                resetForm(type) {
+                    const today = new Date().toISOString().substring(0, 10);
+                    
+                    if (type === 'deadline') {
+                        return { type: 'deadline', heading: '', description: '', date: today, accent: 'amber' };
+                    } else if (type === 'exam') {
+                        return { type: 'exam', courseCode: '', date: today, accent: 'cyan' };
+                    } else if (type === 'competition') {
+                        return { type: 'competition', name: '', date: today, accent: 'green' };
+                    }
+                    return {};
+                },
+
+                // Handles form validation and task addition
+                addTaskValidated() {
+                    let isValid = true;
+                    let errorMessage = '';
+
+                    // Generic validation
+                    if (!this.form.date) {
+                        isValid = false;
+                        errorMessage = 'Please select a date.';
+                    } 
+                    
+                    // Type-specific validation
+                    else if (this.form.type === 'deadline' && (!this.form.heading || !this.form.description)) {
+                        isValid = false;
+                        errorMessage = 'Deadline requires a heading and description.';
+                    } else if (this.form.type === 'exam' && !this.form.courseCode) {
+                        isValid = false;
+                        errorMessage = 'Exam requires a course code.';
+                    } else if (this.form.type === 'competition' && !this.form.name) {
+                        isValid = false;
+                        errorMessage = 'Competition requires a name.';
+                    }
+
+                    if (!isValid) {
+                        this.showMessage(errorMessage);
+                        return;
+                    }
+
+                    // Add item
+                    this.tasks.push({
+                        id: Date.now(), // Unique ID
+                        ...this.form
+                    });
+
+                    this.showMessage(`New ${this.form.type} added successfully!`);
+                    this.closeModal();
+                },
+
+                // Deletion logic using confirm modal
+                deleteTaskWithConfirm(id) {
+                    this.showConfirm(
+                        'Are you sure you want to delete this item?',
+                        () => {
+                            this.tasks = this.tasks.filter(task => task.id !== id);
+                            this.showMessage('Task deleted!');
+                            this.hideConfirm();
+                        }
+                    );
+                },
+
+                // --- Settings Logic ---
+                clearAllDataWithConfirm() {
+                     this.showConfirm(
+                        'WARNING: This will delete ALL tasks permanently. Are you absolutely sure?',
+                        () => {
+                            this.tasks = [];
+                            localStorage.removeItem('taskDashboard');
+                            this.showMessage('All tasks cleared!');
+                            this.isSettingsOpen = false;
+                            this.hideConfirm();
+                        }
+                    );
+                },
+            }
+        }
+    </script>
+</head>
+<body class="min-h-screen antialiased">
+    <div x-data="app()" x-cloak class="min-h-screen bg-primary-dark text-text-light p-4 md:p-8">
+        
+        <!-- Header and Settings Toggle -->
+        <header class="flex justify-between items-center mb-8 pb-4 border-b border-secondary-dark">
+            <h1 class="text-3xl font-bold text-gray-50">Task Tracker Dashboard</h1>
+            <button @click="isSettingsOpen = !isSettingsOpen" 
+                    class="p-2 rounded-full text-gray-400 hover:text-amber-400 transition transform hover:rotate-90 duration-300 focus:outline-none">
+                <!-- Settings Icon (Cog) - Inline SVG -->
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.564.342 1.29.234 1.944-.306z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+            </button>
+        </header>
+
+        <!-- Settings Section (Clear All Data) -->
+        <div x-show="isSettingsOpen" 
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0 transform -translate-y-2"
+             x-transition:enter-end="opacity-100 transform translate-y-0"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100 transform translate-y-0"
+             x-transition:leave-end="opacity-0 transform -translate-y-2"
+             class="bg-card-dark p-4 rounded-lg shadow-xl mb-8">
+            <h2 class="text-xl font-semibold mb-3 border-b border-gray-700 pb-2">Settings</h2>
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center">
+                <p class="text-sm text-gray-400 mb-3 sm:mb-0">Permanently remove all saved tasks from your browser.</p>
+                <button @click="clearAllDataWithConfirm()" 
+                        class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg shadow transition transform hover:scale-105">
+                    Clear All Data
+                </button>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <nav class="flex space-x-2 md:space-x-4 mb-8 border-b border-gray-700">
+            <template x-for="tab in ['deadlines', 'exams', 'competitions']">
+                <button @click="activeTab = tab" 
+                        :class="{ 'border-amber-400 text-amber-400 font-semibold': activeTab === tab && tab === 'deadlines', 
+                                  'border-cyan-400 text-cyan-400 font-semibold': activeTab === tab && tab === 'exams',
+                                  'border-green-400 text-green-400 font-semibold': activeTab === tab && tab === 'competitions',
+                                  'text-gray-400 hover:text-text-light border-transparent': activeTab !== tab }"
+                        class="capitalize pb-3 px-3 transition-colors duration-200 border-b-2 focus:outline-none">
+                    <span x-text="tab"></span>
+                </button>
+            </template>
+        </nav>
+
+        <!-- Add New Button -->
+        <div class="mb-8">
+            <button @click="openModal(activeTab === 'deadlines' ? 'deadline' : activeTab === 'exams' ? 'exam' : 'competition')" 
+                    class="w-full md:w-auto px-6 py-3 bg-gray-700 text-text-light font-medium rounded-lg shadow-lg hover:bg-gray-600 transition transform hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-gray-500">
+                + Add New <span x-text="activeTab.slice(0, -1).charAt(0).toUpperCase() + activeTab.slice(0, -1).slice(1)"></span>
+            </button>
+        </div>
+
+        <!-- Task List -->
+        <main>
+            <div x-show="filteredTasks.length === 0" class="text-center py-10 text-gray-500 bg-card-dark rounded-xl shadow-inner">
+                <p>No <span x-text="activeTab"></span> found. Click 'Add New' to start tracking!</p>
+            </div>
+
+            <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                <template x-for="task in filteredTasks" :key="task.id">
+                    <div class="relative p-6 bg-card-dark rounded-xl shadow-2xl transition transform hover:scale-[1.01] duration-200"
+                         :class="{ 'border-l-4 border-amber-400 hover:shadow-amber-500/20': task.type === 'deadline',
+                                   'border-l-4 border-cyan-400 hover:shadow-cyan-500/20': task.type === 'exam',
+                                   'border-l-4 border-green-400 hover:shadow-green-500/20': task.type === 'competition' }">
+                        
+                        <!-- Delete Button -->
+                        <button @click="deleteTaskWithConfirm(task.id)"
+                                class="absolute top-2 right-2 p-1 text-gray-500 hover:text-red-500 rounded-full transition focus:outline-none">
+                            <!-- Trash Icon -->
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
+
+                        <!-- Item Content -->
+                        <div class="mb-4">
+                            <!-- Type Specific Display -->
+                            <h3 x-show="task.type === 'deadline'" x-text="task.heading" class="text-xl font-semibold mb-1 truncate text-amber-400"></h3>
+                            <h3 x-show="task.type === 'exam'" x-text="'Exam: ' + task.courseCode" class="text-xl font-semibold mb-1 text-cyan-400"></h3>
+                            <h3 x-show="task.type === 'competition'" x-text="'Comp: ' + task.name" class="text-xl font-semibold mb-1 text-green-400"></h3>
+
+                            <p x-show="task.type === 'deadline'" x-text="task.description" class="text-sm text-gray-400 line-clamp-2"></p>
+                        </div>
+                        
+                        <!-- Footer: Date and Days Left -->
+                        <div class="mt-4 pt-4 border-t border-gray-700 flex justify-between items-center text-sm">
+                            <div class="text-gray-400">
+                                Due: <span x-text="formatDate(task.date)" class="font-medium text-text-light"></span>
+                            </div>
+                            <div class="px-3 py-1 rounded-full text-xs font-bold"
+                                 :class="{ 'bg-amber-600/30 text-amber-400': task.type === 'deadline',
+                                           'bg-cyan-600/30 text-cyan-400': task.type === 'exam',
+                                           'bg-green-600/30 text-green-400': task.type === 'competition' }">
+                                <span x-text="daysLeft(task.date)"></span>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </main>
+
+        <!-- Floating Message Box (Validation/Success Feedback) -->
+        <div x-show="message" x-transition.opacity.duration.300
+             class="fixed bottom-4 left-1/2 transform -translate-x-1/2 p-3 bg-gray-700 text-text-light rounded-lg shadow-2xl z-50 text-sm font-medium border border-gray-600">
+            <span x-text="message"></span>
+        </div>
+        
+        <!-- Modal for Add New Item Form -->
+        <div x-show="isModalOpen" 
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-40"
+             @click.self="closeModal()">
+            
+            <div x-trap.noscroll="isModalOpen"
+                 @click.away="closeModal()" 
+                 x-transition:enter="transition ease-out duration-300"
+                 x-transition:enter-start="opacity-0 transform translate-y-4 sm:translate-y-0 sm:scale-95"
+                 x-transition:enter-end="opacity-100 transform translate-y-0 sm:scale-100"
+                 x-transition:leave="transition ease-in duration-200"
+                 x-transition:leave-start="opacity-100 transform translate-y-0 sm:scale-100"
+                 x-transition:leave-end="opacity-0 transform translate-y-4 sm:translate-y-0 sm:scale-95"
+                 class="bg-card-dark rounded-xl w-full max-w-lg shadow-2xl p-6 md:p-8">
+                
+                <h2 class="text-2xl font-bold mb-6 text-text-light capitalize border-b border-gray-700 pb-3">
+                    Add New <span x-text="newItemType"></span>
+                </h2>
+
+                <form @submit.prevent="addTaskValidated" class="space-y-4">
+                    
+                    <!-- Shared Field: Date -->
+                    <div>
+                        <label for="date" class="block text-sm font-medium text-gray-400">Due Date / Event Date *</label>
+                        <input type="date" id="date" x-model="form.date" required
+                                class="mt-1 block w-full bg-primary-dark border border-gray-700 rounded-lg shadow-sm p-3 text-text-light focus:ring-amber-500 focus:border-amber-500">
+                    </div>
+
+                    <!-- Dynamic Fields based on newItemType -->
+                    <template x-if="newItemType === 'deadline'">
+                        <div class="space-y-4">
+                            <div>
+                                <label for="heading" class="block text-sm font-medium text-gray-400">Heading *</label>
+                                <input type="text" id="heading" x-model="form.heading" required
+                                       class="mt-1 block w-full bg-primary-dark border border-gray-700 rounded-lg shadow-sm p-3 text-text-light focus:ring-amber-500 focus:border-amber-500"
+                                       placeholder="e.g., Final Paper Submission">
+                            </div>
+                            <div>
+                                <label for="description" class="block text-sm font-medium text-gray-400">Description *</label>
+                                <textarea id="description" x-model="form.description" required rows="3"
+                                          class="mt-1 block w-full bg-primary-dark border border-gray-700 rounded-lg shadow-sm p-3 text-text-light focus:ring-amber-500 focus:border-amber-500"
+                                          placeholder="Detailed task description"></textarea>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template x-if="newItemType === 'exam'">
+                        <div>
+                            <label for="courseCode" class="block text-sm font-medium text-gray-400">Course Code / Exam Name *</label>
+                            <input type="text" id="courseCode" x-model="form.courseCode" required
+                                   class="mt-1 block w-full bg-primary-dark border border-gray-700 rounded-lg shadow-sm p-3 text-text-light focus:ring-cyan-500 focus:border-cyan-500"
+                                   placeholder="e.g., CS 301 Midterm">
+                        </div>
+                    </template>
+
+                    <template x-if="newItemType === 'competition'">
+                        <div>
+                            <label for="compName" class="block text-sm font-medium text-gray-400">Competition Name *</label>
+                            <input type="text" id="compName" x-model="form.name" required
+                                   class="mt-1 block w-full bg-primary-dark border border-gray-700 rounded-lg shadow-sm p-3 text-text-light focus:ring-green-500 focus:border-green-500"
+                                   placeholder="e.g., Data Science Challenge">
+                        </div>
+                    </template>
+
+                    <!-- Actions -->
+                    <div class="flex justify-end space-x-3 pt-4">
+                        <button type="button" @click="closeModal()" 
+                                class="px-4 py-2 text-gray-400 hover:text-text-light rounded-lg transition">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                                :class="{ 'bg-amber-600 hover:bg-amber-700 focus:ring-amber-500': newItemType === 'deadline', 
+                                          'bg-cyan-600 hover:bg-cyan-700 focus:ring-cyan-500': newItemType === 'exam',
+                                          'bg-green-600 hover:bg-green-700 focus:ring-green-500': newItemType === 'competition' }"
+                                class="px-4 py-2 text-white font-medium rounded-lg shadow transition transform hover:scale-105 focus:outline-none focus:ring-4">
+                            Save Item
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Confirmation Modal (for Delete and Clear All) -->
+        <div x-show="confirmAction" 
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50"
+             @click.self="hideConfirm()">
+            
+            <div @click.away="hideConfirm()" 
+                 class="bg-card-dark rounded-xl w-full max-w-sm shadow-2xl p-6">
+                
+                <h3 class="text-xl font-bold mb-4 text-red-400">Confirm Action</h3>
+
+                <p class="text-gray-300 mb-6" x-text="confirmMessage"></p>
+
+                <div class="flex justify-end space-x-3">
+                    <button type="button" @click="hideConfirm()" 
+                            class="px-4 py-2 text-gray-400 hover:text-text-light rounded-lg transition">
+                        Cancel
+                    </button>
+                    <button type="button" @click="confirmAction();"
+                            class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg shadow transition transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-red-500">
+                        Confirm
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</body>
+</html>
