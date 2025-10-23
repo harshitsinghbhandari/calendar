@@ -3,464 +3,690 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Minimalist Task Tracker</title>
-    <!-- Tailwind CSS CDN (For Styling) -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Alpine.js CDN (For Interactivity and State Management) -->
-    <script src="https://cdn.jsdelivr.net/gh/alpinejs/alpine@v3.x.x/dist/cdn.min.js"></script>
-    
-    <!-- Configuration for dark theme and custom colors -->
-    <script>
-        // Define custom colors for the dark theme
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        'primary-dark': '#121212', // Background
-                        'secondary-dark': '#1e1e1e', // Settings/Modal backdrop
-                        'card-dark': '#242424', // Card background
-                        'text-light': '#e0e0e0', // Main text
-                    }
-                }
-            }
-        }
-    </script>
+    <title>Personal Task Tracker</title>
     <style>
-        /* Custom font import for clean typography (Inter) */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background-color: #121212;
             color: #e0e0e0;
+            line-height: 1.6;
+            min-height: 100vh;
         }
-        /* Hide elements before Alpine init to prevent flicker */
-        [x-cloak] { display: none !important; }
 
-        /* Custom scrollbar for dark theme aesthetic */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 4px; }
-        ::-webkit-scrollbar-track { background: #1e1e1e; }
-    </style>
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
 
-    <script>
-        // Alpine.js Application Logic
-        function app() {
-            return {
-                // --- State ---
-                tasks: [],
-                activeTab: 'deadlines', // 'deadlines', 'exams', 'competitions'
-                isModalOpen: false,
-                isSettingsOpen: false,
-                newItemType: 'deadline',
-                form: {},
-                
-                // --- UI Feedback State (Replacing alert/confirm) ---
-                message: '',
-                confirmAction: null,
-                confirmMessage: '',
-                
-                // --- Initialization and Persistence ---
-                init() {
-                    // 1. Load data from localStorage
-                    this.loadTasks();
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
 
-                    // 2. Watch the tasks array and save automatically on any change
-                    this.$watch('tasks', () => this.saveTasks());
-                },
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
 
-                loadTasks() {
-                    const storedTasks = localStorage.getItem('taskDashboard');
-                    if (storedTasks) {
-                        try {
-                            this.tasks = JSON.parse(storedTasks);
-                        } catch (e) {
-                            console.error("Error loading tasks from localStorage:", e);
-                            this.tasks = [];
-                        }
-                    }
-                },
+        .header p {
+            color: #b0b0b0;
+            font-size: 1.1rem;
+        }
 
-                saveTasks() {
-                    localStorage.setItem('taskDashboard', JSON.stringify(this.tasks));
-                },
+        .tabs {
+            display: flex;
+            margin-bottom: 30px;
+            background: #1e1e1e;
+            border-radius: 12px;
+            padding: 8px;
+            gap: 8px;
+        }
 
-                // --- UI Helper Functions (Non-blocking feedback) ---
-                showMessage(text) {
-                    this.message = text;
-                    setTimeout(() => this.message = '', 3000); // Hide after 3 seconds
-                },
+        .tab-button {
+            flex: 1;
+            padding: 12px 16px;
+            background: transparent;
+            border: none;
+            border-radius: 8px;
+            color: #e0e0e0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+            font-weight: 500;
+        }
 
-                showConfirm(message, action) {
-                    this.confirmMessage = message;
-                    this.confirmAction = action;
-                },
-                
-                hideConfirm() {
-                    this.confirmMessage = '';
-                    this.confirmAction = null;
-                },
+        .tab-button.active {
+            background: #333;
+            color: #fff;
+        }
 
-                // Calculates days left until a given date
-                daysLeft(dateString) {
-                    const oneDay = 24 * 60 * 60 * 1000;
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
+        .tab-button:hover:not(.active) {
+            background: #2a2a2a;
+        }
 
-                    const targetDate = new Date(dateString);
-                    targetDate.setHours(0, 0, 0, 0);
+        .add-button {
+            background: linear-gradient(135deg, #FFA726, #FF8F00);
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            color: #000;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+        }
 
-                    const diffDays = Math.round((targetDate.getTime() - today.getTime()) / oneDay);
+        .add-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(255, 167, 38, 0.3);
+        }
 
-                    if (diffDays === 0) return 'Today';
-                    if (diffDays === 1) return 'Tomorrow';
-                    if (diffDays < 0) return `${Math.abs(diffDays)} days ago`;
+        .items-container {
+            min-height: 200px;
+        }
 
-                    return `${diffDays} days left`;
-                },
+        .item-card {
+            background: #1e1e1e;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border-left: 4px solid;
+            transition: all 0.3s ease;
+            position: relative;
+        }
 
-                formatDate(dateString) {
-                    const options = { year: 'numeric', month: 'short', day: 'numeric' };
-                    return new Date(dateString).toLocaleDateString(undefined, options);
-                },
+        .item-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+        }
 
-                // --- Computed Property (Filter and Sort Tasks) ---
-                get filteredTasks() {
-                    const typeMap = {
-                        'deadlines': 'deadline',
-                        'exams': 'exam',
-                        'competitions': 'competition',
-                    };
-                    
-                    const filtered = this.tasks.filter(task => task.type === typeMap[this.activeTab]);
+        .item-card.deadline {
+            border-left-color: #FFA726;
+        }
 
-                    // Sort by date (ascending)
-                    return filtered.sort((a, b) => new Date(a.date) - new Date(b.date));
-                },
+        .item-card.exam {
+            border-left-color: #26C6DA;
+        }
 
-                // --- Task Management Logic ---
-                openModal(type) {
-                    this.newItemType = type;
-                    this.form = this.resetForm(type);
-                    this.isModalOpen = true;
-                },
+        .item-card.competition {
+            border-left-color: #66BB6A;
+        }
 
-                closeModal() {
-                    this.isModalOpen = false;
-                    this.form = {};
-                },
+        .item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
 
-                // Sets up the form object with default date and accent color
-                resetForm(type) {
-                    const today = new Date().toISOString().substring(0, 10);
-                    
-                    if (type === 'deadline') {
-                        return { type: 'deadline', heading: '', description: '', date: today, accent: 'amber' };
-                    } else if (type === 'exam') {
-                        return { type: 'exam', courseCode: '', date: today, accent: 'cyan' };
-                    } else if (type === 'competition') {
-                        return { type: 'competition', name: '', date: today, accent: 'green' };
-                    }
-                    return {};
-                },
+        .item-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
 
-                // Handles form validation and task addition
-                addTaskValidated() {
-                    let isValid = true;
-                    let errorMessage = '';
+        .item-meta {
+            color: #b0b0b0;
+            font-size: 0.9rem;
+        }
 
-                    // Generic validation
-                    if (!this.form.date) {
-                        isValid = false;
-                        errorMessage = 'Please select a date.';
-                    } 
-                    
-                    // Type-specific validation
-                    else if (this.form.type === 'deadline' && (!this.form.heading || !this.form.description)) {
-                        isValid = false;
-                        errorMessage = 'Deadline requires a heading and description.';
-                    } else if (this.form.type === 'exam' && !this.form.courseCode) {
-                        isValid = false;
-                        errorMessage = 'Exam requires a course code.';
-                    } else if (this.form.type === 'competition' && !this.form.name) {
-                        isValid = false;
-                        errorMessage = 'Competition requires a name.';
-                    }
+        .days-left {
+            font-size: 0.85rem;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-weight: 500;
+            white-space: nowrap;
+        }
 
-                    if (!isValid) {
-                        this.showMessage(errorMessage);
-                        return;
-                    }
+        .days-left.urgent {
+            background: rgba(255, 167, 38, 0.2);
+            color: #FFA726;
+        }
 
-                    // Add item
-                    this.tasks.push({
-                        id: Date.now(), // Unique ID
-                        ...this.form
-                    });
+        .days-left.soon {
+            background: rgba(38, 198, 218, 0.2);
+            color: #26C6DA;
+        }
 
-                    this.showMessage(`New ${this.form.type} added successfully!`);
-                    this.closeModal();
-                },
+        .days-left.normal {
+            background: rgba(102, 187, 106, 0.2);
+            color: #66BB6A;
+        }
 
-                // Deletion logic using confirm modal
-                deleteTaskWithConfirm(id) {
-                    this.showConfirm(
-                        'Are you sure you want to delete this item?',
-                        () => {
-                            this.tasks = this.tasks.filter(task => task.id !== id);
-                            this.showMessage('Task deleted!');
-                            this.hideConfirm();
-                        }
-                    );
-                },
+        .days-left.overdue {
+            background: rgba(244, 67, 54, 0.2);
+            color: #f44336;
+        }
 
-                // --- Settings Logic ---
-                clearAllDataWithConfirm() {
-                     this.showConfirm(
-                        'WARNING: This will delete ALL tasks permanently. Are you absolutely sure?',
-                        () => {
-                            this.tasks = [];
-                            localStorage.removeItem('taskDashboard');
-                            this.showMessage('All tasks cleared!');
-                            this.isSettingsOpen = false;
-                            this.hideConfirm();
-                        }
-                    );
-                },
+        .delete-button {
+            background: rgba(244, 67, 54, 0.1);
+            border: 1px solid rgba(244, 67, 54, 0.3);
+            color: #f44336;
+            border-radius: 6px;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.3s ease;
+        }
+
+        .delete-button:hover {
+            background: rgba(244, 67, 54, 0.2);
+        }
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+
+        .modal-content {
+            background: #2a2a2a;
+            border-radius: 16px;
+            padding: 30px;
+            width: 100%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #e0e0e0;
+        }
+
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 12px 16px;
+            background: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            outline: none;
+            border-color: #FFA726;
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .form-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 25px;
+        }
+
+        .btn-primary {
+            flex: 1;
+            padding: 12px;
+            background: linear-gradient(135deg, #FFA726, #FF8F00);
+            border: none;
+            border-radius: 8px;
+            color: #000;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            flex: 1;
+            padding: 12px;
+            background: transparent;
+            border: 1px solid #555;
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-secondary:hover {
+            background: #333;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #888;
+        }
+
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .settings {
+            margin-top: 40px;
+            padding-top: 30px;
+            border-top: 1px solid #333;
+            text-align: center;
+        }
+
+        .clear-data-button {
+            background: rgba(244, 67, 54, 0.1);
+            border: 1px solid rgba(244, 67, 54, 0.3);
+            color: #f44336;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .clear-data-button:hover {
+            background: rgba(244, 67, 54, 0.2);
+        }
+
+        .error-message {
+            background: rgba(244, 67, 54, 0.1);
+            border: 1px solid rgba(244, 67, 54, 0.3);
+            color: #f44336;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .tabs {
+                flex-direction: column;
+                gap: 4px;
+            }
+
+            .tab-button {
+                padding: 14px;
+            }
+
+            .item-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .modal-content {
+                margin: 10px;
+                padding: 20px;
             }
         }
-    </script>
+
+        @media (max-width: 480px) {
+            .form-buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
 </head>
-<body class="min-h-screen antialiased">
-    <div x-data="app()" x-cloak class="min-h-screen bg-primary-dark text-text-light p-4 md:p-8">
-        
-        <!-- Header and Settings Toggle -->
-        <header class="flex justify-between items-center mb-8 pb-4 border-b border-secondary-dark">
-            <h1 class="text-3xl font-bold text-gray-50">Task Tracker Dashboard</h1>
-            <button @click="isSettingsOpen = !isSettingsOpen" 
-                    class="p-2 rounded-full text-gray-400 hover:text-amber-400 transition transform hover:rotate-90 duration-300 focus:outline-none">
-                <!-- Settings Icon (Cog) - Inline SVG -->
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.564.342 1.29.234 1.944-.306z" />
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-            </button>
-        </header>
-
-        <!-- Settings Section (Clear All Data) -->
-        <div x-show="isSettingsOpen" 
-             x-transition:enter="transition ease-out duration-300"
-             x-transition:enter-start="opacity-0 transform -translate-y-2"
-             x-transition:enter-end="opacity-100 transform translate-y-0"
-             x-transition:leave="transition ease-in duration-200"
-             x-transition:leave-start="opacity-100 transform translate-y-0"
-             x-transition:leave-end="opacity-0 transform -translate-y-2"
-             class="bg-card-dark p-4 rounded-lg shadow-xl mb-8">
-            <h2 class="text-xl font-semibold mb-3 border-b border-gray-700 pb-2">Settings</h2>
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center">
-                <p class="text-sm text-gray-400 mb-3 sm:mb-0">Permanently remove all saved tasks from your browser.</p>
-                <button @click="clearAllDataWithConfirm()" 
-                        class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg shadow transition transform hover:scale-105">
-                    Clear All Data
-                </button>
-            </div>
+<body>
+    <div class="container" x-data="taskTracker()">
+        <div class="header">
+            <h1>Personal Task Tracker</h1>
+<p>Stay organized with your deadlines, exams, and competitions</p>
+            <p style="font-size: 0.9rem; color: #888; margin-top: 8px;">* In this demo, data persists during your session</p>
         </div>
 
-        <!-- Navigation Tabs -->
-        <nav class="flex space-x-2 md:space-x-4 mb-8 border-b border-gray-700">
-            <template x-for="tab in ['deadlines', 'exams', 'competitions']">
-                <button @click="activeTab = tab" 
-                        :class="{ 'border-amber-400 text-amber-400 font-semibold': activeTab === tab && tab === 'deadlines', 
-                                  'border-cyan-400 text-cyan-400 font-semibold': activeTab === tab && tab === 'exams',
-                                  'border-green-400 text-green-400 font-semibold': activeTab === tab && tab === 'competitions',
-                                  'text-gray-400 hover:text-text-light border-transparent': activeTab !== tab }"
-                        class="capitalize pb-3 px-3 transition-colors duration-200 border-b-2 focus:outline-none">
-                    <span x-text="tab"></span>
-                </button>
+        <div class="tabs">
+            <button class="tab-button" :class="{ active: activeTab === 'deadline' }" @click="activeTab = 'deadline'">Deadlines</button>
+            <button class="tab-button" :class="{ active: activeTab === 'exam' }" @click="activeTab = 'exam'">Exams</button>
+            <button class="tab-button" :class="{ active: activeTab === 'competition' }" @click="activeTab = 'competition'">Competitions</button>
+        </div>
+
+        <button class="add-button" @click="openModal()">+ Add New</button>
+
+        <div class="items-container">
+            <template x-for="item in filteredItems" :key="item.id">
+                <div class="item-card" :class="item.type">
+                    <div class="item-header">
+                        <div>
+                            <div class="item-title" x-text="getItemTitle(item)"></div>
+                            <div class="item-meta">
+                                <span x-show="item.type === 'deadline'" x-text="item.description"></span>
+                                <span x-show="item.type === 'exam'" x-text="'Course: ' + item.course_code"></span>
+                                <span x-show="item.type === 'competition'" x-text="'Competition: ' + item.name"></span>
+                                <br>
+                                <span x-text="formatDate(item.date)"></span>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span class="days-left" :class="getDaysLeftClass(item.date)" x-text="getDaysLeft(item.date)"></span>
+                            <button class="delete-button" @click="deleteItem(item.id)">Delete</button>
+                        </div>
+                    </div>
+                </div>
             </template>
-        </nav>
 
-        <!-- Add New Button -->
-        <div class="mb-8">
-            <button @click="openModal(activeTab === 'deadlines' ? 'deadline' : activeTab === 'exams' ? 'exam' : 'competition')" 
-                    class="w-full md:w-auto px-6 py-3 bg-gray-700 text-text-light font-medium rounded-lg shadow-lg hover:bg-gray-600 transition transform hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-gray-500">
-                + Add New <span x-text="activeTab.slice(0, -1).charAt(0).toUpperCase() + activeTab.slice(0, -1).slice(1)"></span>
-            </button>
+            <div x-show="filteredItems.length === 0" class="empty-state">
+                <div class="empty-state-icon">📋</div>
+                <p>No items yet. Click "Add New" to get started!</p>
+            </div>
         </div>
 
-        <!-- Task List -->
-        <main>
-            <div x-show="filteredTasks.length === 0" class="text-center py-10 text-gray-500 bg-card-dark rounded-xl shadow-inner">
-                <p>No <span x-text="activeTab"></span> found. Click 'Add New' to start tracking!</p>
-            </div>
-
-            <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                <template x-for="task in filteredTasks" :key="task.id">
-                    <div class="relative p-6 bg-card-dark rounded-xl shadow-2xl transition transform hover:scale-[1.01] duration-200"
-                         :class="{ 'border-l-4 border-amber-400 hover:shadow-amber-500/20': task.type === 'deadline',
-                                   'border-l-4 border-cyan-400 hover:shadow-cyan-500/20': task.type === 'exam',
-                                   'border-l-4 border-green-400 hover:shadow-green-500/20': task.type === 'competition' }">
-                        
-                        <!-- Delete Button -->
-                        <button @click="deleteTaskWithConfirm(task.id)"
-                                class="absolute top-2 right-2 p-1 text-gray-500 hover:text-red-500 rounded-full transition focus:outline-none">
-                            <!-- Trash Icon -->
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                        </button>
-
-                        <!-- Item Content -->
-                        <div class="mb-4">
-                            <!-- Type Specific Display -->
-                            <h3 x-show="task.type === 'deadline'" x-text="task.heading" class="text-xl font-semibold mb-1 truncate text-amber-400"></h3>
-                            <h3 x-show="task.type === 'exam'" x-text="'Exam: ' + task.courseCode" class="text-xl font-semibold mb-1 text-cyan-400"></h3>
-                            <h3 x-show="task.type === 'competition'" x-text="'Comp: ' + task.name" class="text-xl font-semibold mb-1 text-green-400"></h3>
-
-                            <p x-show="task.type === 'deadline'" x-text="task.description" class="text-sm text-gray-400 line-clamp-2"></p>
-                        </div>
-                        
-                        <!-- Footer: Date and Days Left -->
-                        <div class="mt-4 pt-4 border-t border-gray-700 flex justify-between items-center text-sm">
-                            <div class="text-gray-400">
-                                Due: <span x-text="formatDate(task.date)" class="font-medium text-text-light"></span>
-                            </div>
-                            <div class="px-3 py-1 rounded-full text-xs font-bold"
-                                 :class="{ 'bg-amber-600/30 text-amber-400': task.type === 'deadline',
-                                           'bg-cyan-600/30 text-cyan-400': task.type === 'exam',
-                                           'bg-green-600/30 text-green-400': task.type === 'competition' }">
-                                <span x-text="daysLeft(task.date)"></span>
-                            </div>
-                        </div>
-                    </div>
-                </template>
-            </div>
-        </main>
-
-        <!-- Floating Message Box (Validation/Success Feedback) -->
-        <div x-show="message" x-transition.opacity.duration.300
-             class="fixed bottom-4 left-1/2 transform -translate-x-1/2 p-3 bg-gray-700 text-text-light rounded-lg shadow-2xl z-50 text-sm font-medium border border-gray-600">
-            <span x-text="message"></span>
+        <div class="settings">
+            <button class="clear-data-button" @click="clearAllData()">Clear All Data</button>
         </div>
-        
-        <!-- Modal for Add New Item Form -->
-        <div x-show="isModalOpen" 
-             x-transition:enter="transition ease-out duration-300"
-             x-transition:enter-start="opacity-0"
-             x-transition:enter-end="opacity-100"
-             x-transition:leave="transition ease-in duration-200"
-             x-transition:leave-start="opacity-100"
-             x-transition:leave-end="opacity-0"
-             class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-40"
-             @click.self="closeModal()">
-            
-            <div x-trap.noscroll="isModalOpen"
-                 @click.away="closeModal()" 
-                 x-transition:enter="transition ease-out duration-300"
-                 x-transition:enter-start="opacity-0 transform translate-y-4 sm:translate-y-0 sm:scale-95"
-                 x-transition:enter-end="opacity-100 transform translate-y-0 sm:scale-100"
-                 x-transition:leave="transition ease-in duration-200"
-                 x-transition:leave-start="opacity-100 transform translate-y-0 sm:scale-100"
-                 x-transition:leave-end="opacity-0 transform translate-y-4 sm:translate-y-0 sm:scale-95"
-                 class="bg-card-dark rounded-xl w-full max-w-lg shadow-2xl p-6 md:p-8">
-                
-                <h2 class="text-2xl font-bold mb-6 text-text-light capitalize border-b border-gray-700 pb-3">
-                    Add New <span x-text="newItemType"></span>
-                </h2>
 
-                <form @submit.prevent="addTaskValidated" class="space-y-4">
-                    
-                    <!-- Shared Field: Date -->
-                    <div>
-                        <label for="date" class="block text-sm font-medium text-gray-400">Due Date / Event Date *</label>
-                        <input type="date" id="date" x-model="form.date" required
-                                class="mt-1 block w-full bg-primary-dark border border-gray-700 rounded-lg shadow-sm p-3 text-text-light focus:ring-amber-500 focus:border-amber-500">
+        <!-- Modal -->
+        <div x-show="showModal" class="modal" x-transition.opacity @click.self="closeModal()">
+            <div class="modal-content" @click.stop>
+                <div class="modal-header">
+                    <h2 class="modal-title">Add New Item</h2>
+                </div>
+
+                <div x-show="errorMessage" class="error-message" x-text="errorMessage"></div>
+
+                <form @submit.prevent="addItem()">
+                    <div class="form-group">
+                        <label class="form-label">Type</label>
+                        <select class="form-select" x-model="selectedType" @change="resetForm()">
+                            <option value="deadline">Deadline</option>
+                            <option value="exam">Exam</option>
+                            <option value="competition">Competition</option>
+                        </select>
                     </div>
 
-                    <!-- Dynamic Fields based on newItemType -->
-                    <template x-if="newItemType === 'deadline'">
-                        <div class="space-y-4">
-                            <div>
-                                <label for="heading" class="block text-sm font-medium text-gray-400">Heading *</label>
-                                <input type="text" id="heading" x-model="form.heading" required
-                                       class="mt-1 block w-full bg-primary-dark border border-gray-700 rounded-lg shadow-sm p-3 text-text-light focus:ring-amber-500 focus:border-amber-500"
-                                       placeholder="e.g., Final Paper Submission">
-                            </div>
-                            <div>
-                                <label for="description" class="block text-sm font-medium text-gray-400">Description *</label>
-                                <textarea id="description" x-model="form.description" required rows="3"
-                                          class="mt-1 block w-full bg-primary-dark border border-gray-700 rounded-lg shadow-sm p-3 text-text-light focus:ring-amber-500 focus:border-amber-500"
-                                          placeholder="Detailed task description"></textarea>
-                            </div>
-                        </div>
-                    </template>
-
-                    <template x-if="newItemType === 'exam'">
+                    <!-- Deadline Fields -->
+                    <template x-if="selectedType === 'deadline'">
                         <div>
-                            <label for="courseCode" class="block text-sm font-medium text-gray-400">Course Code / Exam Name *</label>
-                            <input type="text" id="courseCode" x-model="form.courseCode" required
-                                   class="mt-1 block w-full bg-primary-dark border border-gray-700 rounded-lg shadow-sm p-3 text-text-light focus:ring-cyan-500 focus:border-cyan-500"
-                                   placeholder="e.g., CS 301 Midterm">
+                            <div class="form-group">
+                                <label class="form-label">Heading *</label>
+                                <input type="text" class="form-input" x-model="formData.heading" placeholder="Enter deadline heading">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Description *</label>
+                                <textarea class="form-textarea" x-model="formData.description" placeholder="Enter description"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Due Date *</label>
+                                <input type="date" class="form-input" x-model="formData.date">
+                            </div>
                         </div>
                     </template>
 
-                    <template x-if="newItemType === 'competition'">
+                    <!-- Exam Fields -->
+                    <template x-if="selectedType === 'exam'">
                         <div>
-                            <label for="compName" class="block text-sm font-medium text-gray-400">Competition Name *</label>
-                            <input type="text" id="compName" x-model="form.name" required
-                                   class="mt-1 block w-full bg-primary-dark border border-gray-700 rounded-lg shadow-sm p-3 text-text-light focus:ring-green-500 focus:border-green-500"
-                                   placeholder="e.g., Data Science Challenge">
+                            <div class="form-group">
+                                <label class="form-label">Course Code *</label>
+                                <input type="text" class="form-input" x-model="formData.course_code" placeholder="e.g., CS229">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Exam Date *</label>
+                                <input type="date" class="form-input" x-model="formData.date">
+                            </div>
                         </div>
                     </template>
 
-                    <!-- Actions -->
-                    <div class="flex justify-end space-x-3 pt-4">
-                        <button type="button" @click="closeModal()" 
-                                class="px-4 py-2 text-gray-400 hover:text-text-light rounded-lg transition">
-                            Cancel
-                        </button>
-                        <button type="submit"
-                                :class="{ 'bg-amber-600 hover:bg-amber-700 focus:ring-amber-500': newItemType === 'deadline', 
-                                          'bg-cyan-600 hover:bg-cyan-700 focus:ring-cyan-500': newItemType === 'exam',
-                                          'bg-green-600 hover:bg-green-700 focus:ring-green-500': newItemType === 'competition' }"
-                                class="px-4 py-2 text-white font-medium rounded-lg shadow transition transform hover:scale-105 focus:outline-none focus:ring-4">
-                            Save Item
-                        </button>
+                    <!-- Competition Fields -->
+                    <template x-if="selectedType === 'competition'">
+                        <div>
+                            <div class="form-group">
+                                <label class="form-label">Competition Name *</label>
+                                <input type="text" class="form-input" x-model="formData.name" placeholder="Enter competition name">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Date *</label>
+                                <input type="date" class="form-input" x-model="formData.date">
+                            </div>
+                        </div>
+                    </template>
+
+                    <div class="form-buttons">
+                        <button type="submit" class="btn-primary">Save</button>
+                        <button type="button" class="btn-secondary" @click="closeModal()">Cancel</button>
                     </div>
                 </form>
             </div>
         </div>
-        
-        <!-- Confirmation Modal (for Delete and Clear All) -->
-        <div x-show="confirmAction" 
-             x-transition:enter="transition ease-out duration-300"
-             x-transition:enter-start="opacity-0"
-             x-transition:enter-end="opacity-100"
-             x-transition:leave="transition ease-in duration-200"
-             x-transition:leave-start="opacity-100"
-             x-transition:leave-end="opacity-0"
-             class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50"
-             @click.self="hideConfirm()">
-            
-            <div @click.away="hideConfirm()" 
-                 class="bg-card-dark rounded-xl w-full max-w-sm shadow-2xl p-6">
-                
-                <h3 class="text-xl font-bold mb-4 text-red-400">Confirm Action</h3>
-
-                <p class="text-gray-300 mb-6" x-text="confirmMessage"></p>
-
-                <div class="flex justify-end space-x-3">
-                    <button type="button" @click="hideConfirm()" 
-                            class="px-4 py-2 text-gray-400 hover:text-text-light rounded-lg transition">
-                        Cancel
-                    </button>
-                    <button type="button" @click="confirmAction();"
-                            class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg shadow transition transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-red-500">
-                        Confirm
-                    </button>
-                </div>
-            </div>
-        </div>
-
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script>
+        function taskTracker() {
+            return {
+                activeTab: 'deadline',
+                showModal: false,
+                selectedType: 'deadline',
+                errorMessage: '',
+                items: [],
+                formData: {
+                    heading: '',
+                    description: '',
+                    course_code: '',
+                    name: '',
+                    date: ''
+                },
+
+                init() {
+                    this.loadFromLocalStorage();
+                },
+
+                get filteredItems() {
+                    return this.items
+                        .filter(item => item.type === this.activeTab)
+                        .sort((a, b) => new Date(a.date) - new Date(b.date));
+                },
+
+                openModal() {
+                    this.showModal = true;
+                    this.resetForm();
+                },
+
+                closeModal() {
+                    this.showModal = false;
+                    this.errorMessage = '';
+                    this.resetForm();
+                },
+
+                resetForm() {
+                    this.formData = {
+                        heading: '',
+                        description: '',
+                        course_code: '',
+                        name: '',
+                        date: ''
+                    };
+                    this.errorMessage = '';
+                },
+
+                validateForm() {
+                    if (!this.formData.date) {
+                        this.errorMessage = 'Date is required';
+                        return false;
+                    }
+
+                    if (this.selectedType === 'deadline') {
+                        if (!this.formData.heading || !this.formData.description) {
+                            this.errorMessage = 'All fields are required for deadlines';
+                            return false;
+                        }
+                    } else if (this.selectedType === 'exam') {
+                        if (!this.formData.course_code) {
+                            this.errorMessage = 'Course code is required for exams';
+                            return false;
+                        }
+                    } else if (this.selectedType === 'competition') {
+                        if (!this.formData.name) {
+                            this.errorMessage = 'Competition name is required';
+                            return false;
+                        }
+                    }
+
+                    return true;
+                },
+
+                addItem() {
+                    if (!this.validateForm()) {
+                        return;
+                    }
+
+                    const newItem = {
+                        id: Date.now().toString(),
+                        type: this.selectedType,
+                        date: this.formData.date,
+                        ...this.formData
+                    };
+
+                    this.items.push(newItem);
+                    this.saveToLocalStorage();
+                    this.closeModal();
+                },
+
+                deleteItem(id) {
+                    if (confirm('Are you sure you want to delete this item?')) {
+                        this.items = this.items.filter(item => item.id !== id);
+                        this.saveToLocalStorage();
+                    }
+                },
+
+                clearAllData() {
+                    if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
+                        this.items = [];
+                        this.saveToLocalStorage();
+                    }
+                },
+
+                getItemTitle(item) {
+                    if (item.type === 'deadline') return item.heading;
+                    if (item.type === 'exam') return `${item.course_code} Exam`;
+                    if (item.type === 'competition') return item.name;
+                    return 'Unknown';
+                },
+
+                formatDate(dateString) {
+                    const date = new Date(dateString);
+                    return date.toLocaleDateString('en-US', {
+                        weekday: 'short',
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                    });
+                },
+
+                getDaysLeft(dateString) {
+                    const today = new Date();
+                    const itemDate = new Date(dateString);
+                    
+                    // Reset time to compare dates only
+                    today.setHours(0, 0, 0, 0);
+                    itemDate.setHours(0, 0, 0, 0);
+                    
+                    const diffTime = itemDate - today;
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    
+                    if (diffDays < 0) {
+                        return 'Overdue';
+                    } else if (diffDays === 0) {
+                        return 'Today';
+                    } else if (diffDays === 1) {
+                        return 'Tomorrow';
+                    } else {
+                        return `${diffDays} days left`;
+                    }
+                },
+
+                getDaysLeftClass(dateString) {
+                    const today = new Date();
+                    const itemDate = new Date(dateString);
+                    
+                    today.setHours(0, 0, 0, 0);
+                    itemDate.setHours(0, 0, 0, 0);
+                    
+                    const diffTime = itemDate - today;
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    
+                    if (diffDays < 0) {
+                        return 'overdue';
+                    } else if (diffDays <= 3) {
+                        return 'urgent';
+                    } else if (diffDays <= 7) {
+                        return 'soon';
+                    } else {
+                        return 'normal';
+                    }
+                },
+
+                saveToLocalStorage() {
+                    // Data persists in memory during the session
+                    // In a real deployment, this would save to localStorage
+                    console.log('Data saved (in-memory):', this.items);
+                },
+
+                loadFromLocalStorage() {
+                    // Load sample data for demonstration
+                    this.items = [
+                        {
+                            id: '1',
+                            type: 'deadline',
+                            heading: 'Project Report Submission',
+                            description: 'Submit final AI project report with code',
+                            date: '2025-10-30'
+                        },
+                        {
+                            id: '2',
+                            type: 'exam',
+                            course_code: 'CS229',
+                            date: '2025-11-05'
+                        },
+                        {
+                            id: '3',
+                            type: 'competition',
+                            name: 'Google HashCode 2025',
+                            date: '2025-11-12'
+                        }
+                    ];
+                }
+            };
+        }
+    </script>
 </body>
 </html>
