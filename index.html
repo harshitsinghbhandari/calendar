@@ -656,35 +656,23 @@
                 },
 
                 saveToLocalStorage() {
-                    // Data persists in memory during the session
-                    // In a real deployment, this would save to localStorage
-                    console.log('Data saved (in-memory):', this.items);
+                    try {
+                        localStorage.setItem('taskTrackerItems', JSON.stringify(this.items));
+                    } catch (e) {
+                        console.error('Error saving to localStorage:', e);
+                    }
                 },
 
                 loadFromLocalStorage() {
-                    // Load sample data for demonstration
-                    this.items = [
-                        {
-                            id: '1',
-                            type: 'deadline',
-                            heading: 'Project Report Submission',
-                            description: 'Submit final AI project report with code',
-                            date: '2025-10-30'
-                        },
-                        {
-                            id: '2',
-                            type: 'exam',
-                            course_code: 'CS229',
-                            date: '2025-11-05'
-                        },
-                        {
-                            id: '3',
-                            type: 'competition',
-                            name: 'Google HashCode 2025',
-                            date: '2025-11-12'
-                        }
-                    ];
+                    try {
+                        const stored = localStorage.getItem('taskTrackerItems');
+                        this.items = stored ? JSON.parse(stored) : [];
+                    } catch (e) {
+                        console.error('Error loading from localStorage:', e);
+                        this.items = [];
+                    }
                 }
+
             };
         }
     </script>
